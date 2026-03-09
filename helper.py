@@ -32,28 +32,28 @@ def run_inference(input_text, temperature=0.2):
             {"role":"system","content":"""
             CODEBASE CONTEXT - Dawn of Machines RTS backend (server.js, Node.js + Socket.io)
 
-            DATA STRUCTURES:
-            - games: Map<gameId, game> — game state
-            - game.players: Map<socketId, player> — player state: { resources: {iron,steel,carbon,graphene,electricity}, sight: Set, discovered: Set, hackIds: Set }
-            - game.units: Map<unitId, unit> — { id, hackId, player(socketId), x, z, position, sight: Set, mobile, integrity, speed }
-            - game.buildings: Map<buildingId, building> — { id, hackId, player(socketId), x, z, position, sight: Set, type }
-            - game.board: Map<tileId, tile> — 32x32=1024 tiles: { id, x, z, resource, unit, building }
-            - game.actions: Array — active action queue, processed every 50ms
-            - game.unitsByPlayer: Map<socketId, Set<unitId>>
-            - game.buildingsByPlayer: Map<socketId, Set<buildingId>>
-            - game.buildingsByType: Map<type, Set<buildingId>>
+            GAME LOOP: runs every 50ms via setInterval. Order: drainElectricity → generateElectricity → computePlayersSight → resolveActions. Every millisecond saved here matters.
 
-            GAME LOOP: setInterval 50ms — drainElectricity → generateElectricity → computePlayersSight → resolveActions
+            CORE STATE:
+            - games: all active games in memory, never persisted
+            - game.players: keyed by socket.id. Each player has resources (iron, steel, carbon, graphene, electricity), a sight Set of visible tileIds, a discovered Set of all ever-seen tileIds, and a hackIds Set of acquired hack tokens
+            - game.units: keyed by unitId. Each unit has x/z coordinates, a position (tileId = z*32+x), a sight Set, integrity, speed, and a player (socket.id)
+            - game.buildings: same structure as units but immobile
+            - game.board: 1024 tiles (32x32), each tile holds references to unit/building/resource by id
+            - game.actions: flat array of all in-flight actions. Iterated every 50ms. This is the hottest loop in the codebase.
+            - game.unitsByPlayer, game.buildingsByPlayer, game.buildingsByType: index Maps to avoid full scans
 
-            ACTION TYPES: movement, gather, scan, hack, attack, assemble-*, build-*, refine-iron, refine-carbon, electricity-threshold-*
+            ELECTRICITY: drains 0.1 per tick per player + 0.2 per active action belonging to that player. Generators add 0.4 per tick each. Electricity at 0 = game over for that player.
 
-            RESOURCES: iron, carbon, steel, graphene, electricity. Electricity drains 0.1/tick + 0.2 per active action. Generators produce 0.4/tick each.
+            SIGHT: computed every tick by merging all unit and building sight Sets per player. Expensive when many units are moving.
 
-            SINGLE FILE: server.js. No game.js. No separate modules.
+            SINGLE FILE: server.js only. No modules.
 
             Apply modern JavaScript (ES2022+), Node.js, and Socket.io best practices.
             There MUST be a performance gain in EACH proposal. 
             There MUST be a change in each proposal. Previous code CANNOT be the same as proposed code.
+            Do NOT offer proposals that only offer a small performance increase. Aim for as much performance increase as possible.
+            Do NOT provide improvements on readability and cleanliness now. Focus SOLELY on efficiency and performance.
             """},
             {"role":"user", "content": input_text},
         ]
